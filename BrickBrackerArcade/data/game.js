@@ -20,6 +20,9 @@
             laser: cssVar('--power-laser', '#69f7ff'),
         }
     };
+    const BOTTOM_PAD = parseInt(cssVar('--game-bottom-pad', '24'), 10) || 24;
+    const FLOOR_INSET = parseInt(cssVar('--game-bottom-inset', '64'), 10) || 64;
+    const BASE_FLOOR_INSET = parseInt(cssVar('--game-bottom-inset', '64'), 10) || 64;
 
     // ===== Canvas & DPI setup =====
     const canvas = document.getElementById('game');
@@ -43,23 +46,30 @@
 
         const hudH = hudEl ? hudEl.getBoundingClientRect().height : 0;
         const helpH = helpEl ? helpEl.getBoundingClientRect().height : 0;
+
+        // How much of the layout viewport is hidden by browser toolbars
+        const bottomChrome = vv ? Math.max(0, window.innerHeight - viewportH) : 0;
+
+        // in-canvas “floor” that everything must sit above
+        world.floorInset = BASE_FLOOR_INSET + Math.ceil(bottomChrome);
+
         const basePad = 16;
         if (wrapEl) {
             wrapEl.style.paddingTop = `${basePad + hudH}px`;
-            wrapEl.style.paddingBottom = `${basePad + helpH}px`;
+            wrapEl.style.paddingBottom = `${basePad + helpH + world.floorInset}px`;
         }
         if (touchLayer) {
             touchLayer.style.top = `${hudH}px`;
-            touchLayer.style.bottom = `${helpH}px`;
+            touchLayer.style.bottom = `${helpH + world.floorInset}px`;
         }
 
-        // Total non-canvas vertical space (.wrap padding + HUD + help)
-        const verticalPadding = (basePad * 2) + hudH + helpH;
+        // account for the floor inset when computing drawable area
+        const verticalPadding = (basePad * 2) + hudH + helpH + world.floorInset;
 
         // Use 80% of the viewport as the minimum canvas height
         const minH = viewportH * 0.8;
         const availH = Math.max(minH, viewportH - verticalPadding);
-        const availW = Math.max(240, viewportW - 32); // .wrap 16px left/right
+        const availW = Math.max(240, viewportW - 32);
 
         const targetW = availW;
         const targetH = availH;
@@ -100,7 +110,9 @@
         laserCooldown: 0,
         maxBalls: 5,
         levelPending: false,
+        floorInset: BASE_FLOOR_INSET,
     };
+
 
     const paddle = { wBase: 110, w: 110, h: 14, x: 0, y: 0, speed: 12, targetX: null };
 
@@ -261,7 +273,7 @@
         paddle.w = clamp(paddle.wBase - (world.level - 1) * 6, 70, 140);
         paddle.h = 14;
         paddle.x = world.W / 2 - paddle.w / 2;
-        paddle.y = world.H - 40;
+        paddle.y = world.H - world.floorInset - 24;  // was world.H - 40
         paddle.targetX = null;
     }
 
@@ -494,7 +506,7 @@
             if (ball.x + ball.r > world.W) { ball.x = world.W - ball.r; ball.vx = -Math.abs(ball.vx); SFX.wall(); }
             if (ball.y - ball.r < 0) { ball.y = ball.r; ball.vy = Math.abs(ball.vy); SFX.wall(); }
 
-            if (ball.y - ball.r > world.H) {
+            if (ball.y - ball.r > world.H - world.floorInset) {
                 balls.splice(bi, 1);
                 if (balls.length === 0) {
                     world.lives--; ui.lives.textContent = world.lives; SFX.lose();
@@ -575,7 +587,7 @@
         // Powerups
         for (let i = powerups.length - 1; i >= 0; i--) {
             const p = powerups[i]; p.y += p.vy;
-            if (p.y > world.H + 20) { powerups.splice(i, 1); continue; }
+            if (p.y > world.H - world.floorInset + 20) { powerups.splice(i, 1); continue; }
             if (p.y + 10 >= paddle.y && p.y <= paddle.y + paddle.h && p.x >= paddle.x && p.x <= paddle.x + paddle.w) {
                 applyEffect(p.type); SFX.power(); powerups.splice(i, 1);
             }
@@ -606,10 +618,36 @@
 
     function render() {
         ctx.clearRect(0, 0, world.W, world.H);
-        // Neon grid background
-        ctx.save(); const step = 28;
-        for (let x = 0; x < world.W; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, world.H); ctx.strokeStyle = 'rgba(0,240,255,0.18)'; ctx.lineWidth = 1; ctx.shadowColor = 'rgba(0,240,255,0.5)'; ctx.shadowBlur = 6; ctx.stroke(); }
-        for (let y = 0; y < world.H; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(world.W, y); ctx.strokeStyle = 'rgba(255,43,214,0.15)'; ctx.lineWidth = 1; ctx.shadowColor = 'rgba(255,43,214,0.45)'; ctx.shadowBlur = 6; ctx.stroke(); }
+
+        // Neon grid background (stop at the playable floor)
+        ctx.save();
+        const step = 28;
+        for (let x = 0; x < world.W; x += step) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, world.H - world.floorInset);
+            ctx.strokeStyle = 'rgba(0,240,255,0.18)';
+            ctx.lineWidth = 1;
+            ctx.shadowColor = 'rgba(0,240,255,0.5)';
+            ctx.shadowBlur = 6;
+            ctx.stroke();
+        }
+        for (let y = 0; y < world.H - world.floorInset; y += step) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(world.W, y);
+            ctx.strokeStyle = 'rgba(255,43,214,0.15)';
+            ctx.lineWidth = 1;
+            ctx.shadowColor = 'rgba(255,43,214,0.45)';
+            ctx.shadowBlur = 6;
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // Footer gutter so you can see where toolbars are “below” playfield
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(0, world.H - world.floorInset, world.W, world.floorInset);
         ctx.restore();
 
         // Bricks
@@ -746,7 +784,7 @@
         fitCanvas();
         const scaleX = world.W / prevW, scaleY = world.H / prevH;
         paddle.x *= scaleX;
-        paddle.y = world.H - 40;
+        paddle.y = world.H - world.floorInset - 24; // was world.H - 40
         for (const b of balls) { b.x *= scaleX; b.y *= scaleY; }
         buildBricks();
     }, { passive: true });
