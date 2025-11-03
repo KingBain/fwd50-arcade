@@ -23,6 +23,7 @@
 
     // ===== Canvas & DPI setup =====
     const canvas = document.getElementById('game');
+    const touchLayer = document.getElementById('touchLayer');
     const ctx = canvas.getContext('2d');
     function fitCanvas() {
         const hudEl = document.querySelector('.hud');
@@ -43,6 +44,10 @@
         if (wrapEl) {
             wrapEl.style.paddingTop = `${basePad + hudH}px`;
             wrapEl.style.paddingBottom = `${basePad + helpH}px`;
+        }
+        if (touchLayer) {
+            touchLayer.style.top = `${hudH}px`;
+            touchLayer.style.bottom = `${helpH}px`;
         }
         const verticalPadding = (basePad * 2) + hudH + helpH;
 
@@ -305,9 +310,9 @@
 
     function pointerXFromEvent(e) { const rect = canvas.getBoundingClientRect(); return (e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX) - rect.left; }
     function onPointerMove(e) { const x = pointerXFromEvent(e); paddle.targetX = clamp(x - paddle.w / 2, 0, world.W - paddle.w); }
-    canvas.addEventListener('mousemove', onPointerMove);
-    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); onPointerMove(e); }, { passive: false });
-    canvas.addEventListener('pointerdown', (e) => {
+    touchLayer.addEventListener('mousemove', onPointerMove);
+    touchLayer.addEventListener('touchmove', (e) => { e.preventDefault(); onPointerMove(e); }, { passive: false });
+    touchLayer.addEventListener('pointerdown', (e) => {
         // Prevent accidental text selection / scrolling on touch
         e.preventDefault();
         ensureAudio();

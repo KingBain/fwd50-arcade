@@ -137,12 +137,25 @@
         /* thumb target */
       }
     }
+
+    .touch {
+      position: fixed;
+      left: 0;
+      right: 0;
+      /* top/bottom set from JS to sit under HUD and above help */
+      touch-action: none;
+      /* disable browser gestures */
+      z-index: 3;
+      /* above canvas, below HUD/help (HUD has z-index:2, so bump help if needed) */
+      background: transparent;
+    }
   </style>
 </head>
 
 <body>
   <div class="wrap">
     <canvas id="game" width="900" height="600" aria-label="Brick Breaker Game"></canvas>
+    <div id="touchLayer" class="touch" aria-hidden="true"></div>
   </div>
 
   <div class="hud">
