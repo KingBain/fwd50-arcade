@@ -7,6 +7,9 @@
 
   <title>Brick Breaker — Vanilla JS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <style>
     :root {
       --bg: #090314;
@@ -33,7 +36,8 @@
       /* cyan */
       --game-bottom-pad: 24px;
       /* extra space under the canvas */
-      --game-bottom-inset: 64px; /* space inside the canvas for the footer/gutter */
+      --game-bottom-inset: 64px;
+      /* space inside the canvas for the footer/gutter */
     }
 
     html,
@@ -152,6 +156,29 @@
       /* above canvas, below HUD/help (HUD has z-index:2, so bump help if needed) */
       background: transparent;
     }
+
+    .ticker {
+      position: fixed;
+      top: 48px;
+      left: 0;
+      right: 0;
+      height: 28px;
+      line-height: 28px;
+      padding: 0 12px;
+      background: rgba(0, 240, 255, 0.08);
+      border-bottom: 1px solid rgba(0, 240, 255, 0.18);
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      z-index: 2;
+    }
+
+    @media (pointer: coarse) {
+      .ticker {
+        top: 56px;
+      }
+    }
   </style>
 </head>
 
@@ -172,12 +199,13 @@
     <button id="restart" class="badge" title="Restart game" aria-label="Restart">↻</button>
     <button id="mute" class="badge" title="Mute / Unmute" aria-label="Mute or Unmute">🔊</button>
   </div>
+  <div id="ticker" class="ticker" aria-live="polite"></div>
 
   <div class="help">
     Controls: Tap/Drag to move • P = Pause • R = Restart • 🔊 to mute
   </div>
 
-  <script src="game.js"></script>
+  <script src="game.js?v=<%= Date.now() %>"></script>
 </body>
 
 </html>

@@ -35,6 +35,55 @@
         helpEl.style.display = show ? 'block' : 'none';
     }
 
+    // ===== Realtime leaderboard over WebSocket =====
+    let socket = null;
+    let socketReady = false;
+    let latestBoard = []; // array of {name, score}
+    const tickerEl = document.getElementById('ticker');
+
+    function ensureSocket() {
+        if (socket && socketReady) return;
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        socket = new WebSocket(`${proto}://${location.host}/ws`);
+
+        socket.addEventListener('open', () => { socketReady = true; });
+        socket.addEventListener('close', () => { socketReady = false; setTimeout(ensureSocket, 1000); });
+        socket.addEventListener('error', () => { /* ignore; reconnect will try again */ });
+
+        socket.addEventListener('message', (ev) => {
+            try {
+                const msg = JSON.parse(ev.data);
+                if (msg && msg.type === 'leaderboard' && Array.isArray(msg.items)) {
+                    latestBoard = msg.items;
+                    renderTicker();
+                }
+            } catch { }
+        });
+    }
+
+    function renderTicker() {
+        if (!tickerEl) return;
+        if (!latestBoard.length) { tickerEl.textContent = 'Top Scores will appear here.'; return; }
+        const parts = latestBoard.map((e, i) => `${i + 1}. ${e.name} ${e.score}`);
+        tickerEl.textContent = 'Top: ' + parts.join('   •   ');
+    }
+
+    // Call once on load:
+    ensureSocket();
+
+    function submitScore(name, score) {
+        ensureSocket();
+        const safeName = (name || '').toString().trim().slice(0, 16) || 'Player';
+        const msg = `SUBMIT:${safeName}|${Math.max(0, score | 0)}`;
+        if (socket && socketReady) {
+            socket.send(msg);
+        } else {
+            // try once the socket opens
+            const onOpen = () => { socket.removeEventListener('open', onOpen); socket.send(msg); };
+            socket && socket.addEventListener('open', onOpen);
+        }
+    }
+
     function fitCanvas() {
         const hudEl = document.querySelector('.hud');
         const helpEl = document.querySelector('.help');
@@ -51,7 +100,7 @@
         const bottomChrome = vv ? Math.max(0, window.innerHeight - viewportH) : 0;
 
         // in-canvas “floor” that everything must sit above
-        world.floorInset =  Math.ceil(bottomChrome);
+        world.floorInset = Math.ceil(bottomChrome);
 
         const basePad = 16;
         if (wrapEl) {
@@ -531,8 +580,19 @@
                         SFX.gameover();
                         world.running = false;
                         updateHelpVisibility();
+
+                        // Ask for name once, then submit to the board
+                        setTimeout(() => {
+                            // Simple prompt to keep it lightweight on mobile
+                            const suggested = (localStorage.getItem('bb_name') || '').slice(0, 16);
+                            const name = (prompt('Enter a name for the leaderboard:', suggested) || '').trim().slice(0, 16);
+                            if (name) localStorage.setItem('bb_name', name);
+                            submitScore(name || suggested || 'Player', world.score | 0);
+                        }, 50);
+
                         return;
-                    } else {
+                    }
+                    else {
                         ui.setStatus('Life Lost — Press Space');
                         world.running = false;
                         resetPaddle();
