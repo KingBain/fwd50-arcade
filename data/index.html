@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <title>Brick Breaker — Vanilla JS</title>
@@ -9,52 +10,126 @@
       --bg: #090314;
       --bg2: #1a0533;
       --fg: #e7faff;
-      --accent: #ff2bd6;   /* neon magenta */
-      --accent2: #00f0ff;  /* neon cyan */
-      --brick1: #ff1178;   /* hot pink */
-      --brick2: #00e5ff;   /* electric cyan */
-      --brick3: #ffe600;   /* neon yellow */
-      --brick4: #9d00ff;   /* electric purple */
+      --accent: #ff2bd6;
+      /* neon magenta */
+      --accent2: #00f0ff;
+      /* neon cyan */
+      --brick1: #ff1178;
+      /* hot pink */
+      --brick2: #00e5ff;
+      /* electric cyan */
+      --brick3: #ffe600;
+      /* neon yellow */
+      --brick4: #9d00ff;
+      /* electric purple */
       --power-widen: #21ffa9;
-      --power-slow:  #6bf1ff;
-      --power-life:  #ffdd57;
-      --power-multi: #ff6be5; /* pink */
-      --power-laser: #69f7ff; /* cyan */
+      --power-slow: #6bf1ff;
+      --power-life: #ffdd57;
+      --power-multi: #ff6be5;
+      /* pink */
+      --power-laser: #69f7ff;
+      /* cyan */
     }
-    html, body {
+
+    html,
+    body {
       height: 100%;
       margin: 0;
       background: radial-gradient(1000px 700px at 20% 10%, #140a2a, var(--bg)),
-                 radial-gradient(800px 600px at 80% 80%, #120620, var(--bg2));
+        radial-gradient(800px 600px at 80% 80%, #120620, var(--bg2));
       color: var(--fg);
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
       user-select: none;
       -webkit-user-select: none;
       overflow: hidden;
     }
-    .wrap { height: 100%; display: grid; place-items: center; padding: 16px; box-sizing: border-box; }
+
+    .wrap {
+      height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
     canvas {
-      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.1));
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.1));
       border-radius: 16px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(0,240,255,0.12);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 240, 255, 0.12);
       touch-action: none;
     }
+
     .hud {
-      position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 16px; align-items: center; padding: 8px 14px;
-      background: rgba(255, 43, 214, 0.10); border: 1px solid rgba(0, 240, 255, 0.18);
-      border-radius: 999px; backdrop-filter: blur(8px); font-weight: 600; letter-spacing: 0.2px; z-index: 2;
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      padding: 8px 14px;
+      background: rgba(255, 43, 214, 0.10);
+      border: 1px solid rgba(0, 240, 255, 0.18);
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      z-index: 2;
     }
-    .hud span { opacity: 0.95 }
-    .badge { padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08); }
+
+    .hud span {
+      opacity: 0.95
+    }
+
+    .badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
     .help {
-      position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); opacity: 0.8; font-size: 12px;
-      background: rgba(255, 43, 214, 0.10); border: 1px solid rgba(0, 240, 255, 0.18);
-      border-radius: 10px; padding: 6px 10px; backdrop-filter: blur(8px); z-index: 2;
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0.8;
+      font-size: 12px;
+      background: rgba(255, 43, 214, 0.10);
+      border: 1px solid rgba(0, 240, 255, 0.18);
+      border-radius: 10px;
+      padding: 6px 10px;
+      backdrop-filter: blur(8px);
+      z-index: 2;
     }
-    #mute { cursor: pointer; }
+
+    #mute {
+      cursor: pointer;
+    }
+
+    /* Larger touch targets on coarse pointers (phones/tablets) */
+    @media (pointer: coarse) {
+      .hud {
+        gap: 12px;
+      }
+
+      .badge {
+        padding: 8px 12px;
+        font-size: 16px;
+      }
+
+      #playPause,
+      #restart,
+      #mute {
+        min-width: 44px;
+        /* thumb target */
+        min-height: 44px;
+        /* thumb target */
+      }
+    }
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <canvas id="game" width="900" height="600" aria-label="Brick Breaker Game"></canvas>
@@ -64,11 +139,19 @@
     <span>Score: <strong id="score">0</strong></span>
     <span>Level: <strong id="level">1</strong></span>
     <span>Lives: <strong id="lives" class="badge">3</strong></span>
-    <span id="status" class="badge">Press Space to Start</span>
-    <button id="mute" class="badge" title="Mute / Unmute">🔊</button>
+    <span id="status" class="badge">Tap or Space to Start</span>
+
+    <!-- Controls -->
+    <button id="playPause" class="badge" aria-pressed="false" title="Play / Pause" aria-label="Play or Pause">▶</button>
+    <button id="restart" class="badge" title="Restart game" aria-label="Restart">↻</button>
+    <button id="mute" class="badge" title="Mute / Unmute" aria-label="Mute or Unmute">🔊</button>
   </div>
-  <div class="help">Controls: ←/→ or A/D, Mouse/Touch to move • P = Pause • R = Restart • 🔊 to mute</div>
+
+  <div class="help">
+    Controls: Tap/Drag to move • P = Pause • R = Restart • 🔊 to mute
+  </div>
 
   <script src="game.js"></script>
 </body>
+
 </html>

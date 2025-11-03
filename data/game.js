@@ -45,8 +45,11 @@
         lives: document.getElementById('lives'),
         status: document.getElementById('status'),
         muteBtn: document.getElementById('mute'),
+        playPauseBtn: document.getElementById('playPause'),
+        restartBtn: document.getElementById('restart'),
         setStatus(t) { this.status.textContent = t; }
     };
+
 
     const world = {
         W: 900, H: 600,
@@ -88,6 +91,15 @@
         }
         if (audioCtx.state === 'suspended') audioCtx.resume();
     }
+
+    function updatePlayPauseBtn() {
+        // Show ▶ when not actively playing; show ⏸ during active play
+        const playing = world.running && !world.paused;
+        ui.playPauseBtn.textContent = playing ? '⏸' : '▶';
+        ui.playPauseBtn.setAttribute('aria-pressed', playing ? 'true' : 'false');
+    }
+
+
     function beep({ freq = 440, dur = 0.07, type = 'sine', vol = 1, slide = 0 }) {
         if (!audioCtx || isMuted) return;
         const t0 = audioCtx.currentTime;
@@ -121,6 +133,38 @@
         isMuted = !isMuted;
         ui.muteBtn.textContent = isMuted ? '🔇' : '🔊';
     });
+
+
+    ui.playPauseBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        ensureAudio();
+
+        // If not started yet, Start
+        if (!world.running) {
+            world.running = true;
+            world.paused = false;
+            ui.setStatus('');
+            SFX.start();
+            updatePlayPauseBtn();
+            return;
+        }
+
+        // Toggle pause
+        world.paused = !world.paused;
+        ui.setStatus(world.paused ? 'Paused' : '');
+        updatePlayPauseBtn();
+    });
+
+    ui.restartBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        restart(true);
+        // After restart, game is awaiting start
+        ui.setStatus('Tap or Space to Start');
+        world.running = false;
+        world.paused = false;
+        updatePlayPauseBtn();
+    });
+
 
     // ===== Helpers =====
     function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
@@ -191,6 +235,7 @@
         resetBalls(true);
         particles.length = 0;
         SFX.level();
+        updatePlayPauseBtn();
     }
 
     function restart(all = true) {
@@ -204,6 +249,7 @@
         }
         buildBricks(); resetPaddle(); resetBalls(true);
         ui.setStatus('Press Space to Start');
+        updatePlayPauseBtn();
     }
 
     // ===== Input =====
@@ -228,6 +274,25 @@
     function onPointerMove(e) { const x = pointerXFromEvent(e); paddle.targetX = clamp(x - paddle.w / 2, 0, world.W - paddle.w); }
     canvas.addEventListener('mousemove', onPointerMove);
     canvas.addEventListener('touchmove', (e) => { e.preventDefault(); onPointerMove(e); }, { passive: false });
+    canvas.addEventListener('pointerdown', (e) => {
+        // Prevent accidental text selection / scrolling on touch
+        e.preventDefault();
+        ensureAudio();
+
+        if (!world.running) {
+            world.running = true;
+            world.paused = false;
+            ui.setStatus('');
+            SFX.start();
+            updatePlayPauseBtn();
+            return;
+        }
+        if (world.paused) {
+            world.paused = false;
+            ui.setStatus('');
+            updatePlayPauseBtn();
+        }
+    }, { passive: false });
 
     // ===== Physics & collisions =====
     function rectCircleOverlap(cx, cy, r, rx, ry, rw, rh) {
@@ -388,7 +453,7 @@
                 if (balls.length === 0) {
                     world.lives--; ui.lives.textContent = world.lives; SFX.lose();
                     if (world.lives <= 0) { ui.setStatus('Game Over — Press R to Restart'); SFX.gameover(); world.running = false; return; }
-                    else { ui.setStatus('Life Lost — Press Space'); world.running = false; resetPaddle(); resetBalls(true); return; }
+                    else { ui.setStatus('Life Lost — Press Space'); world.running = false; resetPaddle(); updatePlayPauseBtn(); resetBalls(true); return; }
                 }
                 continue;
             }
@@ -545,8 +610,7 @@
             ctx.fillStyle = 'rgba(255,255,255,0.9)';
             ctx.font = '700 28px system-ui, -apple-system, Segoe UI, Roboto, Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(world.paused ? 'Paused' : 'Press Space to Start', world.W / 2, world.H / 2 - 10);
-            ctx.font = '500 14px system-ui';
+            ctx.fillText(world.paused ? 'Paused' : 'Tap or Space to Start', world.W / 2, world.H / 2 - 10); ctx.font = '500 14px system-ui';
             ctx.fillText('Move: ← →  •  P: Pause  •  R: Restart  •  Catch powerups!', world.W / 2, world.H / 2 + 18);
             ctx.restore();
         }
@@ -627,6 +691,14 @@
         for (const b of balls) { b.x *= scaleX; b.y *= scaleY; }
         buildBricks();
     }, { passive: true });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && world.running && !world.paused) {
+            world.paused = true;
+            ui.setStatus('Paused');
+            updatePlayPauseBtn();
+        }
+    });
 
     fitCanvas(); restart(true); requestAnimationFrame(frame);
 })();
