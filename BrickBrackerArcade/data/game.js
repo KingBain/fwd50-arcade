@@ -27,6 +27,7 @@
     function fitCanvas() {
         const hudEl = document.querySelector('.hud');
         const helpEl = document.querySelector('.help');
+        const wrapEl = document.querySelector('.wrap');
 
         // Use visual viewport on mobile so the canvas tracks address bar/show-hide
         const vv = window.visualViewport;
@@ -36,19 +37,28 @@
         // Account for fixed HUD at top and help bar at bottom (+ wrap padding ~16px top/bottom)
         const hudH = hudEl ? hudEl.getBoundingClientRect().height : 0;
         const helpH = helpEl ? helpEl.getBoundingClientRect().height : 0;
-        const verticalPadding = 32;  // .wrap has 16px padding top/bottom
+        //const verticalPadding = 32;  // .wrap has 16px padding top/bottom
+        const basePad = 16;          // .wrap’s base padding on each edge
+        // Make the wrapper reserve the HUD/help space so the canvas can use the rest.
+        if (wrapEl) {
+            wrapEl.style.paddingTop = `${basePad + hudH}px`;
+            wrapEl.style.paddingBottom = `${basePad + helpH}px`;
+        }
+        const verticalPadding = (basePad * 2) + hudH + helpH;
 
         const availH = Math.max(240, viewportH - hudH - helpH - verticalPadding);
         const availW = Math.max(240, viewportW - 32); // .wrap 16px left/right
 
         // Preserve the game’s 3:2 aspect, but prioritize filling height
-        const ASPECT = 1.5; // width / height
-        let targetH = availH;
-        let targetW = targetH * ASPECT;
-        if (targetW > availW) {           // if too wide, fit to width instead
-            targetW = availW;
-            targetH = targetW / ASPECT;
-        }
+        //const ASPECT = 1.5; // width / height
+        //let targetH = availH;
+        //let targetW = targetH * ASPECT;
+        //if (targetW > availW) {           // if too wide, fit to width instead
+        //    targetW = availW;
+        //    targetH = targetW / ASPECT;
+        //}
+        const targetW = availW;
+        const targetH = availH;
 
         const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
         canvas.style.width = `${targetW}px`;
@@ -220,7 +230,7 @@
 
         // No spacing between bricks
         bricks.pad = 0;
-        bricks.top = 80;
+        bricks.top = Math.max(50, Math.round(world.H * 0.12));
 
         // Brick height shrinks slightly per level (down to 70% of base)
         const heightScale = Math.max(0.70, 1 - (world.level - 1) * 0.03);
