@@ -3,6 +3,8 @@
 
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
   <title>Brick Breaker — Vanilla JS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
@@ -45,7 +47,8 @@
     }
 
     .wrap {
-      height: 100%;
+      height: 100dvh;
+      /* mobile-safe viewport height */
       display: grid;
       place-items: center;
       padding: 16px;
@@ -61,21 +64,25 @@
 
     .hud {
       position: fixed;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
+      top: 0;
+      left: 0;
+      right: 0;
+      /* full-width banner */
       display: flex;
+      flex-wrap: wrap;
       gap: 16px;
       align-items: center;
-      padding: 8px 14px;
+      padding: 10px 16px;
       background: rgba(255, 43, 214, 0.10);
-      border: 1px solid rgba(0, 240, 255, 0.18);
-      border-radius: 999px;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.18);
+      border-radius: 0;
+      /* no rounded corners */
       backdrop-filter: blur(8px);
       font-weight: 600;
       letter-spacing: 0.2px;
       z-index: 2;
     }
+
 
     .hud span {
       opacity: 0.95
@@ -93,15 +100,17 @@
       bottom: 10px;
       left: 50%;
       transform: translateX(-50%);
-      opacity: 0.8;
+      opacity: 0.85;
       font-size: 12px;
       background: rgba(255, 43, 214, 0.10);
       border: 1px solid rgba(0, 240, 255, 0.18);
       border-radius: 10px;
-      padding: 6px 10px;
+      padding: 4px 8px;
+      /* was 6px 10px */
       backdrop-filter: blur(8px);
       z-index: 2;
     }
+
 
     #mute {
       cursor: pointer;

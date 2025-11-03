@@ -25,18 +25,41 @@
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
     function fitCanvas() {
-        const maxW = Math.min(window.innerWidth - 32, 1000);
-        const maxH = Math.min(window.innerHeight - 120, 800);
-        const targetW = Math.min(maxW, maxH * 1.5);
-        const targetH = targetW / 1.5;
+        const hudEl = document.querySelector('.hud');
+        const helpEl = document.querySelector('.help');
+
+        // Use visual viewport on mobile so the canvas tracks address bar/show-hide
+        const vv = window.visualViewport;
+        const viewportH = vv ? vv.height : window.innerHeight;
+        const viewportW = vv ? vv.width : window.innerWidth;
+
+        // Account for fixed HUD at top and help bar at bottom (+ wrap padding ~16px top/bottom)
+        const hudH = hudEl ? hudEl.getBoundingClientRect().height : 0;
+        const helpH = helpEl ? helpEl.getBoundingClientRect().height : 0;
+        const verticalPadding = 32;  // .wrap has 16px padding top/bottom
+
+        const availH = Math.max(240, viewportH - hudH - helpH - verticalPadding);
+        const availW = Math.max(240, viewportW - 32); // .wrap 16px left/right
+
+        // Preserve the game’s 3:2 aspect, but prioritize filling height
+        const ASPECT = 1.5; // width / height
+        let targetH = availH;
+        let targetW = targetH * ASPECT;
+        if (targetW > availW) {           // if too wide, fit to width instead
+            targetW = availW;
+            targetH = targetW / ASPECT;
+        }
+
         const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
         canvas.style.width = `${targetW}px`;
         canvas.style.height = `${targetH}px`;
         canvas.width = Math.round(targetW * dpr);
         canvas.height = Math.round(targetH * dpr);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        world.W = targetW; world.H = targetH;
+        world.W = targetW;
+        world.H = targetH;
     }
+
 
     // ===== Game state =====
     const ui = {
