@@ -25,22 +25,25 @@
     const canvas = document.getElementById('game');
     const touchLayer = document.getElementById('touchLayer');
     const ctx = canvas.getContext('2d');
+    const helpEl = document.querySelector('.help');
+    function updateHelpVisibility() {
+        if (!helpEl) return;
+        const show = !world.running || world.paused;
+        helpEl.style.display = show ? 'block' : 'none';
+    }
+
     function fitCanvas() {
         const hudEl = document.querySelector('.hud');
         const helpEl = document.querySelector('.help');
         const wrapEl = document.querySelector('.wrap');
 
-        // Use visual viewport on mobile so the canvas tracks address bar/show-hide
         const vv = window.visualViewport;
         const viewportH = vv ? vv.height : window.innerHeight;
         const viewportW = vv ? vv.width : window.innerWidth;
 
-        // Account for fixed HUD at top and help bar at bottom (+ wrap padding ~16px top/bottom)
         const hudH = hudEl ? hudEl.getBoundingClientRect().height : 0;
         const helpH = helpEl ? helpEl.getBoundingClientRect().height : 0;
-        //const verticalPadding = 32;  // .wrap has 16px padding top/bottom
-        const basePad = 16;          // .wrap’s base padding on each edge
-        // Make the wrapper reserve the HUD/help space so the canvas can use the rest.
+        const basePad = 16;
         if (wrapEl) {
             wrapEl.style.paddingTop = `${basePad + hudH}px`;
             wrapEl.style.paddingBottom = `${basePad + helpH}px`;
@@ -49,19 +52,15 @@
             touchLayer.style.top = `${hudH}px`;
             touchLayer.style.bottom = `${helpH}px`;
         }
+
+        // Total non-canvas vertical space (.wrap padding + HUD + help)
         const verticalPadding = (basePad * 2) + hudH + helpH;
 
-        const availH = Math.max(240, viewportH - hudH - helpH - verticalPadding);
+        // Use 80% of the viewport as the minimum canvas height
+        const minH = viewportH * 0.8;
+        const availH = Math.max(minH, viewportH - verticalPadding);
         const availW = Math.max(240, viewportW - 32); // .wrap 16px left/right
 
-        // Preserve the game’s 3:2 aspect, but prioritize filling height
-        //const ASPECT = 1.5; // width / height
-        //let targetH = availH;
-        //let targetW = targetH * ASPECT;
-        //if (targetW > availW) {           // if too wide, fit to width instead
-        //    targetW = availW;
-        //    targetH = targetW / ASPECT;
-        //}
         const targetW = availW;
         const targetH = availH;
 
@@ -74,6 +73,7 @@
         world.W = targetW;
         world.H = targetH;
     }
+
 
 
     // ===== Game state =====
@@ -177,30 +177,31 @@
         e.preventDefault();
         ensureAudio();
 
-        // If not started yet, Start
         if (!world.running) {
             world.running = true;
             world.paused = false;
             ui.setStatus('');
             SFX.start();
             updatePlayPauseBtn();
+            updateHelpVisibility();   // add this
             return;
         }
 
-        // Toggle pause
         world.paused = !world.paused;
         ui.setStatus(world.paused ? 'Paused' : '');
         updatePlayPauseBtn();
+        updateHelpVisibility();     // add this
     });
+
 
     ui.restartBtn.addEventListener('click', (e) => {
         e.preventDefault();
         restart(true);
-        // After restart, game is awaiting start
         ui.setStatus('Tap or Space to Start');
         world.running = false;
         world.paused = false;
         updatePlayPauseBtn();
+        updateHelpVisibility();     // add this
     });
 
 
@@ -301,7 +302,12 @@
         if (e.key === 'p' || e.key === 'P') { if (world.running) { world.paused = !world.paused; ui.setStatus(world.paused ? 'Paused (P to Resume)' : ''); } return; }
         if (e.key === 'r' || e.key === 'R') return restart(true);
         if (e.key === ' ') {
-            if (!world.running) { world.running = true; ui.setStatus(''); SFX.start(); }
+            if (!world.running) {
+                world.running = true;
+                ui.setStatus('');
+                SFX.start();
+                updateHelpVisibility();   // add this
+            }
             return;
         }
         keys.add(e.key);
@@ -313,7 +319,6 @@
     touchLayer.addEventListener('mousemove', onPointerMove);
     touchLayer.addEventListener('touchmove', (e) => { e.preventDefault(); onPointerMove(e); }, { passive: false });
     touchLayer.addEventListener('pointerdown', (e) => {
-        // Prevent accidental text selection / scrolling on touch
         e.preventDefault();
         ensureAudio();
 
@@ -323,14 +328,17 @@
             ui.setStatus('');
             SFX.start();
             updatePlayPauseBtn();
+            updateHelpVisibility();   // add this
             return;
         }
         if (world.paused) {
             world.paused = false;
             ui.setStatus('');
             updatePlayPauseBtn();
+            updateHelpVisibility();   // add this
         }
     }, { passive: false });
+
 
     // ===== Physics & collisions =====
     function rectCircleOverlap(cx, cy, r, rx, ry, rw, rh) {
@@ -490,8 +498,21 @@
                 balls.splice(bi, 1);
                 if (balls.length === 0) {
                     world.lives--; ui.lives.textContent = world.lives; SFX.lose();
-                    if (world.lives <= 0) { ui.setStatus('Game Over — Press R to Restart'); SFX.gameover(); world.running = false; return; }
-                    else { ui.setStatus('Life Lost — Press Space'); world.running = false; resetPaddle(); updatePlayPauseBtn(); resetBalls(true); return; }
+                    if (world.lives <= 0) {
+                        ui.setStatus('Game Over — Press R to Restart');
+                        SFX.gameover();
+                        world.running = false;
+                        updateHelpVisibility();     // add this
+                        return;
+                    } else {
+                        ui.setStatus('Life Lost — Press Space');
+                        world.running = false;
+                        resetPaddle();
+                        updatePlayPauseBtn();
+                        resetBalls(true);
+                        updateHelpVisibility();     // add this
+                        return;
+                    }
                 }
                 continue;
             }
@@ -735,8 +756,9 @@
             world.paused = true;
             ui.setStatus('Paused');
             updatePlayPauseBtn();
+            updateHelpVisibility();   // add this
         }
     });
 
-    fitCanvas(); restart(true); requestAnimationFrame(frame);
+    fitCanvas(); restart(true); updateHelpVisibility(); requestAnimationFrame(frame);
 })();
