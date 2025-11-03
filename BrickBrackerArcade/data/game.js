@@ -51,12 +51,12 @@
         const bottomChrome = vv ? Math.max(0, window.innerHeight - viewportH) : 0;
 
         // in-canvas “floor” that everything must sit above
-        world.floorInset = BASE_FLOOR_INSET + Math.ceil(bottomChrome);
+        world.floorInset =  Math.ceil(bottomChrome);
 
         const basePad = 16;
         if (wrapEl) {
             wrapEl.style.paddingTop = `${basePad + hudH}px`;
-            wrapEl.style.paddingBottom = `${basePad + helpH + world.floorInset}px`;
+            wrapEl.style.paddingBottom = `${basePad + helpH}px`;
         }
         if (touchLayer) {
             touchLayer.style.top = `${hudH}px`;
@@ -220,7 +220,12 @@
     // ===== Helpers =====
     function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
     function now() { return performance.now(); }
-
+    const FRAME_MS = 1000 / 60; // canonical frame (16.666…ms)
+    function stepMult(dtMs) {
+        // Convert elapsed milliseconds into “frames worth” of movement.
+        // Clamp to avoid giant jumps on tab switches.
+        return Math.max(0.25, Math.min(4, dtMs / FRAME_MS));
+    }
     function resetBalls(centerOnPaddle = true) {
         balls.length = 0;
         const speed = 6 + Math.min(4, world.level * 0.8);
@@ -472,14 +477,18 @@
         }
     }
 
-    function update() {
+    function update(dtMs) {
+        const f = stepMult(dtMs);           // how many 60fps “frames” elapsed
         const t = now();
+
+        // expire timed effects
         for (let i = activeEffects.length - 1; i >= 0; i--) {
             if (t >= activeEffects[i].until) { try { activeEffects[i].cleanup(); } catch { } activeEffects.splice(i, 1); }
         }
 
+        // laser salvos (cooldown is tracked in real ms)
         if (activeEffects.some(e => e.type === 'laser')) {
-            world.laserCooldown -= 16; // rough frame time
+            world.laserCooldown -= dtMs;
             if (world.laserCooldown <= 0) {
                 const left = paddle.x + 6;
                 const right = paddle.x + paddle.w - 6;
@@ -490,17 +499,24 @@
             }
         }
 
+        // paddle input
         let dx = 0;
-        if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) dx -= paddle.speed;
-        if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) dx += paddle.speed;
-        if (dx !== 0) { paddle.targetX = null; paddle.x = clamp(paddle.x + dx, 0, world.W - paddle.w); }
-        else if (paddle.targetX != null) { const delta = paddle.targetX - paddle.x; paddle.x += delta * 0.25; }
+        if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) dx -= paddle.speed * f;
+        if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) dx += paddle.speed * f;
+        if (dx !== 0) {
+            paddle.targetX = null;
+            paddle.x = clamp(paddle.x + dx, 0, world.W - paddle.w);
+        } else if (paddle.targetX != null) {
+            const delta = paddle.targetX - paddle.x;
+            paddle.x += delta * 0.25 * f; // keep same “feel”, scaled by time
+        }
 
-        // Balls
+        // balls
         for (let bi = balls.length - 1; bi >= 0; bi--) {
             const ball = balls[bi];
-            ball.x += ball.vx * world.speedScale;
-            ball.y += ball.vy * world.speedScale;
+
+            ball.x += ball.vx * world.speedScale * f;
+            ball.y += ball.vy * world.speedScale * f;
 
             if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx = Math.abs(ball.vx); SFX.wall(); }
             if (ball.x + ball.r > world.W) { ball.x = world.W - ball.r; ball.vx = -Math.abs(ball.vx); SFX.wall(); }
@@ -514,7 +530,7 @@
                         ui.setStatus('Game Over — Press R to Restart');
                         SFX.gameover();
                         world.running = false;
-                        updateHelpVisibility();     // add this
+                        updateHelpVisibility();
                         return;
                     } else {
                         ui.setStatus('Life Lost — Press Space');
@@ -522,25 +538,32 @@
                         resetPaddle();
                         updatePlayPauseBtn();
                         resetBalls(true);
-                        updateHelpVisibility();     // add this
+                        updateHelpVisibility();
                         return;
                     }
                 }
                 continue;
             }
 
+            // paddle bounce
             if (rectCircleOverlap(ball.x, ball.y, ball.r, paddle.x, paddle.y, paddle.w, paddle.h) && ball.vy > 0) {
                 const hitPos = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2);
                 const maxBounce = Math.PI / 3; const angle = hitPos * maxBounce;
                 const speed = Math.hypot(ball.vx, ball.vy) * 1.01;
-                ball.vx = Math.sin(angle) * speed; ball.vy = -Math.abs(Math.cos(angle) * speed); ball.y = paddle.y - ball.r - 0.01; SFX.paddle();
+                ball.vx = Math.sin(angle) * speed;
+                ball.vy = -Math.abs(Math.cos(angle) * speed);
+                ball.y = paddle.y - ball.r - 0.01;
+                SFX.paddle();
             }
+
+            // brick collisions (use previous position based on dt)
+            const prevX = ball.x - ball.vx * world.speedScale * f;
+            const prevY = ball.y - ball.vy * world.speedScale * f;
 
             for (let i = 0; i < bricks.grid.length; i++) {
                 const b = bricks.grid[i]; if (b.hp <= 0) continue;
                 if (!rectCircleOverlap(ball.x, ball.y, ball.r, b.x, b.y, b.w, b.h)) continue;
 
-                const prevX = ball.x - ball.vx * world.speedScale, prevY = ball.y - ball.vy * world.speedScale;
                 const wasLeft = prevX <= b.x, wasRight = prevX >= b.x + b.w;
                 const overlapLeft = Math.abs((b.x - (ball.x + ball.r)));
                 const overlapRight = Math.abs((ball.x - ball.r) - (b.x + b.w));
@@ -558,15 +581,18 @@
                     bricks.grid.splice(i, 1); i--;
                 }
 
-                ball.x += ball.vx * 0.02; ball.y += ball.vy * 0.02;
+                // nudge out using a tiny fraction of this frame’s advance
+                ball.x += ball.vx * 0.02 * f;
+                ball.y += ball.vy * 0.02 * f;
                 maybeHandleLevelClear();
                 break;
             }
         }
 
-        // Shots (lasers)
+        // shots (lasers)
         for (let si = shots.length - 1; si >= 0; si--) {
-            const s = shots[si]; s.y += s.vy;
+            const s = shots[si];
+            s.y += s.vy * f;
             if (s.y < -10) { shots.splice(si, 1); continue; }
             for (let i = 0; i < bricks.grid.length; i++) {
                 const b = bricks.grid[i];
@@ -581,28 +607,31 @@
                 }
             }
         }
-        // After all brick mutations this frame, check once for clear
         maybeHandleLevelClear();
 
-        // Powerups
+        // powerups
         for (let i = powerups.length - 1; i >= 0; i--) {
-            const p = powerups[i]; p.y += p.vy;
+            const p = powerups[i];
+            p.y += p.vy * f;
             if (p.y > world.H - world.floorInset + 20) { powerups.splice(i, 1); continue; }
             if (p.y + 10 >= paddle.y && p.y <= paddle.y + paddle.h && p.x >= paddle.x && p.x <= paddle.x + paddle.w) {
                 applyEffect(p.type); SFX.power(); powerups.splice(i, 1);
             }
         }
 
-        // Particles
+        // particles
         for (let i = particles.length - 1; i >= 0; i--) {
             const p = particles[i];
-            p.x += p.vx; p.y += p.vy; p.vy += 0.15; // gravity
-            p.vx *= 0.99; p.vy *= 0.99;           // slight air drag
-            p.size *= 0.992;
-            p.life -= 1;
+            p.x += p.vx * f; p.y += p.vy * f;
+            p.vy += 0.15 * f;                    // gravity per “frame”
+            p.vx *= Math.pow(0.99, f);           // air drag scaled to dt
+            p.vy *= Math.pow(0.99, f);
+            p.size *= Math.pow(0.992, f);
+            p.life -= f;
             if (p.life <= 0 || p.size < 0.4 || p.y > world.H + 30) particles.splice(i, 1);
         }
     }
+
 
     // ===== Render =====
     function drawRoundedRect(x, y, w, h, r) {
@@ -749,7 +778,12 @@
     assert('Balls array wired', () => { resetPaddle(); resetBalls(true); if (!balls.length) throw new Error('no initial ball'); });
     assert('Powerup types wired', () => { ['widen', 'slow', 'life', 'multi', 'laser'].forEach(t => { if (!COLORS.power[t]) throw new Error('missing color ' + t); }); });
     assert('Laser effect spawns shots', () => {
-        const t = now(); activeEffects.push({ type: 'laser', until: t + 200, cleanup: () => { } }); world.laserCooldown = 0; const start = shots.length; update(); if (shots.length <= start) throw new Error('no shots fired');
+        const t = now();
+        activeEffects.push({ type: 'laser', until: t + 200, cleanup: () => { } });
+        world.laserCooldown = 0;
+        const start = shots.length;
+        update(16); // simulate ~1 frame
+        if (shots.length <= start) throw new Error('no shots fired');
     });
     assert('Multiball weight increases as bricks dwindle', () => {
         const wFull = getPowerWeights(0.9, 1); const wFew = getPowerWeights(0.1, 1);
@@ -773,9 +807,15 @@
     });
 
     // ===== Game loop =====
-    function frame() {
-        if (world.running && !world.paused) { update(); }
-        render(); requestAnimationFrame(frame);
+    let _lastTs = null;
+    function frame(ts) {
+        if (_lastTs == null) _lastTs = ts;
+        const dtMs = Math.min(50, ts - _lastTs); // cap to avoid huge jumps after tab sleep
+        _lastTs = ts;
+
+        if (world.running && !world.paused) { update(dtMs); }
+        render();
+        requestAnimationFrame(frame);
     }
 
     // ===== Init =====
