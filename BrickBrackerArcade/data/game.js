@@ -23,6 +23,7 @@
     const BOTTOM_PAD = parseInt(cssVar('--game-bottom-pad', '24'), 10) || 24;
     const FLOOR_INSET = parseInt(cssVar('--game-bottom-inset', '64'), 10) || 64;
     const BASE_FLOOR_INSET = parseInt(cssVar('--game-bottom-inset', '64'), 10) || 64;
+    const SAFE_BOTTOM = parseInt(cssVar('--safe-bottom', '0'), 10) || 0;
 
     // ===== Canvas & DPI setup =====
     const canvas = document.getElementById('game');
@@ -88,6 +89,7 @@
         const hudEl = document.querySelector('.hud');
         const helpEl = document.querySelector('.help');
         const wrapEl = document.querySelector('.wrap');
+        const tickerEl = document.getElementById('ticker');
 
         const vv = window.visualViewport;
         const viewportH = vv ? vv.height : window.innerHeight;
@@ -95,25 +97,34 @@
 
         const hudH = hudEl ? hudEl.getBoundingClientRect().height : 0;
         const helpH = helpEl ? helpEl.getBoundingClientRect().height : 0;
+        const tickH = tickerEl ? tickerEl.getBoundingClientRect().height : 0;
 
-        // How much of the layout viewport is hidden by browser toolbars
+        // Real hidden chrome area (Android/iOS bottom bars)
         const bottomChrome = vv ? Math.max(0, window.innerHeight - viewportH) : 0;
 
-        // in-canvas “floor” that everything must sit above
-        world.floorInset = Math.ceil(bottomChrome);
+        // Respect both real chrome and iOS safe-area
+        world.floorInset = Math.ceil(bottomChrome + SAFE_BOTTOM);
+
+        // Place ticker directly under HUD (no hardcoded CSS top)
+        if (tickerEl) {
+            tickerEl.style.top = `${hudH}px`;
+        }
 
         const basePad = 16;
         if (wrapEl) {
-            wrapEl.style.paddingTop = `${basePad + hudH}px`;
+            // Push canvas below HUD + TICKER
+            wrapEl.style.paddingTop = `${basePad + hudH + tickH}px`;
+            // Keep enough bottom padding for help strip (when visible)
             wrapEl.style.paddingBottom = `${basePad + helpH}px`;
         }
         if (touchLayer) {
-            touchLayer.style.top = `${hudH}px`;
+            // Touch layer must start under HUD + TICKER and stop above help + floor inset
+            touchLayer.style.top = `${hudH + tickH}px`;
             touchLayer.style.bottom = `${helpH + world.floorInset}px`;
         }
 
-        // account for the floor inset when computing drawable area
-        const verticalPadding = (basePad * 2) + hudH + helpH + world.floorInset;
+        // Total vertical chrome we must subtract from the drawable area
+        const verticalPadding = (basePad * 2) + hudH + tickH + helpH + world.floorInset;
 
         // Use 80% of the viewport as the minimum canvas height
         const minH = viewportH * 0.8;
@@ -140,11 +151,9 @@
         score: document.getElementById('score'),
         level: document.getElementById('level'),
         lives: document.getElementById('lives'),
-        status: document.getElementById('status'),
         muteBtn: document.getElementById('mute'),
         playPauseBtn: document.getElementById('playPause'),
         restartBtn: document.getElementById('restart'),
-        setStatus(t) { this.status.textContent = t; }
     };
 
 
@@ -241,7 +250,6 @@
         if (!world.running) {
             world.running = true;
             world.paused = false;
-            ui.setStatus('');
             SFX.start();
             updatePlayPauseBtn();
             updateHelpVisibility();   // add this
@@ -249,7 +257,6 @@
         }
 
         world.paused = !world.paused;
-        ui.setStatus(world.paused ? 'Paused' : '');
         updatePlayPauseBtn();
         updateHelpVisibility();     // add this
     });
@@ -258,7 +265,6 @@
     ui.restartBtn.addEventListener('click', (e) => {
         e.preventDefault();
         restart(true);
-        ui.setStatus('Tap or Space to Start');
         world.running = false;
         world.paused = false;
         updatePlayPauseBtn();
@@ -353,7 +359,6 @@
             ui.level.textContent = world.level; ui.score.textContent = world.score; ui.lives.textContent = world.lives;
         }
         buildBricks(); resetPaddle(); resetBalls(true);
-        ui.setStatus('Press Space to Start');
         updatePlayPauseBtn();
     }
 
@@ -365,12 +370,11 @@
 
     window.addEventListener('keydown', (e) => {
         if (['ArrowLeft', 'ArrowRight', ' ', 'a', 'd', 'A', 'D', 'p', 'P', 'r', 'R'].includes(e.key)) e.preventDefault();
-        if (e.key === 'p' || e.key === 'P') { if (world.running) { world.paused = !world.paused; ui.setStatus(world.paused ? 'Paused (P to Resume)' : ''); } return; }
+        if (e.key === 'p' || e.key === 'P') { if (world.running) { world.paused = !world.paused; } return; }
         if (e.key === 'r' || e.key === 'R') return restart(true);
         if (e.key === ' ') {
             if (!world.running) {
                 world.running = true;
-                ui.setStatus('');
                 SFX.start();
                 updateHelpVisibility();   // add this
             }
@@ -391,7 +395,6 @@
         if (!world.running) {
             world.running = true;
             world.paused = false;
-            ui.setStatus('');
             SFX.start();
             updatePlayPauseBtn();
             updateHelpVisibility();   // add this
@@ -399,7 +402,6 @@
         }
         if (world.paused) {
             world.paused = false;
-            ui.setStatus('');
             updatePlayPauseBtn();
             updateHelpVisibility();   // add this
         }
@@ -419,9 +421,8 @@
         if (world.levelPending || !world.running) return;
         if (bricks.grid.length === 0 || bricks.grid.every(bb => bb.hp <= 0)) {
             world.levelPending = true; // prevent double triggers from concurrent loops
-            ui.setStatus('Level Clear!');
             world.running = false;
-            setTimeout(() => { ui.setStatus(''); newLevel(); world.running = true; }, 600);
+            setTimeout(() => {  newLevel(); world.running = true; }, 600);
         }
     }
 
@@ -576,7 +577,6 @@
                 if (balls.length === 0) {
                     world.lives--; ui.lives.textContent = world.lives; SFX.lose();
                     if (world.lives <= 0) {
-                        ui.setStatus('Game Over — Press R to Restart');
                         SFX.gameover();
                         world.running = false;
                         updateHelpVisibility();
@@ -593,7 +593,6 @@
                         return;
                     }
                     else {
-                        ui.setStatus('Life Lost — Press Space');
                         world.running = false;
                         resetPaddle();
                         updatePlayPauseBtn();
@@ -804,7 +803,7 @@
 
     // ===== Minimal self-tests (run once on load) =====
     function isValidCanvasColor(color) { const off = document.createElement('canvas').getContext('2d'); const before = off.fillStyle; off.fillStyle = color; return off.fillStyle !== before; }
-    function assert(name, fn) { try { fn(); console.log('✅ ' + name); } catch (e) { console.error('❌ ' + name, e); ui.setStatus('Startup test failed: ' + name); throw e; } }
+    function assert(name, fn) { try { fn(); console.log('✅ ' + name); } catch (e) { console.error('❌ ' + name, e); throw e; } }
     assert('2D canvas context exists', () => { if (!ctx) throw new Error('no 2d context'); });
     assert('CSS var --accent2 resolves to a valid color', () => { if (!isValidCanvasColor(COLORS.accent2)) throw new Error('resolved to invalid: ' + COLORS.accent2); });
     assert('Gradient accepts resolved color', () => { const g = ctx.createRadialGradient(10, 10, 1, 10, 10, 5); g.addColorStop(0, 'white'); g.addColorStop(1, COLORS.accent2); });
@@ -889,10 +888,22 @@
         buildBricks();
     }, { passive: true });
 
+    if (window.visualViewport) {
+        // Refit when mobile browser chrome shows/hides or when the URL bar moves
+        window.visualViewport.addEventListener('resize', () => {
+            const prevW = world.W, prevH = world.H;
+            fitCanvas();
+            const scaleX = world.W / prevW, scaleY = world.H / prevH;
+            paddle.x *= scaleX;
+            paddle.y = world.H - world.floorInset - 24;
+            for (const b of balls) { b.x *= scaleX; b.y *= scaleY; }
+            buildBricks();
+        }, { passive: true });
+    }
+
     document.addEventListener('visibilitychange', () => {
         if (document.hidden && world.running && !world.paused) {
             world.paused = true;
-            ui.setStatus('Paused');
             updatePlayPauseBtn();
             updateHelpVisibility();   // add this
         }

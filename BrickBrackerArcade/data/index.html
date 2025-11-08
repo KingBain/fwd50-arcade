@@ -38,6 +38,8 @@
       /* extra space under the canvas */
       --game-bottom-inset: 64px;
       /* space inside the canvas for the footer/gutter */
+          /* NEW: expose safe area to JS & CSS */
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
 
     html,
@@ -103,22 +105,14 @@
       background: rgba(255, 255, 255, 0.08);
     }
 
-    .help {
-      position: fixed;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      opacity: 0.85;
-      font-size: 12px;
-      background: rgba(255, 43, 214, 0.10);
-      border: 1px solid rgba(0, 240, 255, 0.18);
-      border-radius: 10px;
-      padding: 4px 8px;
-      /* was 6px 10px */
-      backdrop-filter: blur(8px);
-      z-index: 2;
-    }
-
+  .help{
+    position: fixed;
+    /* was bottom: 10px; */
+    bottom: max(10px, env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    /* rest unchanged */
+  }
 
     #mute {
       cursor: pointer;
@@ -157,28 +151,22 @@
       background: transparent;
     }
 
-    .ticker {
-      position: fixed;
-      top: 48px;
-      left: 0;
-      right: 0;
-      height: 28px;
-      line-height: 28px;
-      padding: 0 12px;
-      background: rgba(0, 240, 255, 0.08);
-      border-bottom: 1px solid rgba(0, 240, 255, 0.18);
-      font-size: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      z-index: 2;
-    }
+  .ticker{
+    position: fixed;
+    /* REMOVE these two lines: they’re now set from JS
+       top: 48px;
+       @media (pointer: coarse){ top: 56px; } */
+    left: 0; right: 0;
+    height: 28px;
+    line-height: 28px;
+    padding: 0 12px;
+    background: rgba(0,240,255,0.08);
+    border-bottom: 1px solid rgba(0,240,255,0.18);
+    font-size: 13px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    z-index: 2;
+  }
 
-    @media (pointer: coarse) {
-      .ticker {
-        top: 56px;
-      }
-    }
   </style>
 </head>
 
@@ -192,7 +180,7 @@
     <span>Score: <strong id="score">0</strong></span>
     <span>Level: <strong id="level">1</strong></span>
     <span>Lives: <strong id="lives" class="badge">3</strong></span>
-    <span id="status" class="badge">Tap or Space to Start</span>
+
 
     <!-- Controls -->
     <button id="playPause" class="badge" aria-pressed="false" title="Play / Pause" aria-label="Play or Pause">▶</button>
