@@ -62,6 +62,14 @@
         });
     }
 
+    function updateHudVisibility() {
+        const hudEl = document.querySelector('.hud');
+        if (!hudEl) return;
+        const show = !world.running || world.paused; // show when paused or not running
+        hudEl.classList.toggle('visible', show);
+    }
+
+
     function renderTicker() {
         if (!tickerEl) return;
         if (!latestBoard.length) { tickerEl.textContent = 'Top Scores will appear here.'; return; }
@@ -95,7 +103,8 @@
         const viewportH = vv ? vv.height : window.innerHeight;
         const viewportW = vv ? vv.width : window.innerWidth;
 
-        const hudH = hudEl ? hudEl.getBoundingClientRect().height : 0;
+        // HUD is fixed above the game — exclude its height from layout
+        const hudH = 0;
         const helpH = helpEl ? helpEl.getBoundingClientRect().height : 0;
         const tickH = tickerEl ? tickerEl.getBoundingClientRect().height : 0;
 
@@ -105,26 +114,27 @@
         // Respect both real chrome and iOS safe-area
         world.floorInset = Math.ceil(bottomChrome + SAFE_BOTTOM);
 
-        // Place ticker directly under HUD (no hardcoded CSS top)
+        // Keep ticker just below the top of the viewport (not offset by HUD)
         if (tickerEl) {
-            tickerEl.style.top = `${hudH}px`;
+            tickerEl.style.top = `0px`;
         }
 
         const basePad = 16;
         if (wrapEl) {
-            // Push canvas below HUD + TICKER
-            wrapEl.style.paddingTop = `${basePad + hudH + tickH}px`;
+            // Only leave space for ticker — HUD floats above the game
+            wrapEl.style.paddingTop = `${basePad + tickH}px`;
             // Keep enough bottom padding for help strip (when visible)
             wrapEl.style.paddingBottom = `${basePad + helpH}px`;
         }
+
         if (touchLayer) {
-            // Touch layer must start under HUD + TICKER and stop above help + floor inset
-            touchLayer.style.top = `${hudH + tickH}px`;
+            // Touch layer starts below ticker, ends above help + safe area
+            touchLayer.style.top = `${tickH}px`;
             touchLayer.style.bottom = `${helpH + world.floorInset}px`;
         }
 
         // Total vertical chrome we must subtract from the drawable area
-        const verticalPadding = (basePad * 2) + hudH + tickH + helpH + world.floorInset;
+        const verticalPadding = (basePad * 2) + tickH + helpH + world.floorInset;
 
         // Use 80% of the viewport as the minimum canvas height
         const minH = viewportH * 0.8;
@@ -143,6 +153,7 @@
         world.W = targetW;
         world.H = targetH;
     }
+
 
 
 
@@ -252,13 +263,15 @@
             world.paused = false;
             SFX.start();
             updatePlayPauseBtn();
-            updateHelpVisibility();   // add this
+            updateHelpVisibility();
+            updateHudVisibility();  // add this
             return;
         }
 
         world.paused = !world.paused;
         updatePlayPauseBtn();
-        updateHelpVisibility();     // add this
+        updateHelpVisibility();
+        updateHudVisibility();
     });
 
 
@@ -268,7 +281,8 @@
         world.running = false;
         world.paused = false;
         updatePlayPauseBtn();
-        updateHelpVisibility();     // add this
+        updateHelpVisibility();
+        updateHudVisibility();
     });
 
 
@@ -397,13 +411,15 @@
             world.paused = false;
             SFX.start();
             updatePlayPauseBtn();
-            updateHelpVisibility();   // add this
+            updateHelpVisibility();
+            updateHudVisibility();
             return;
         }
         if (world.paused) {
             world.paused = false;
             updatePlayPauseBtn();
-            updateHelpVisibility();   // add this
+            updateHelpVisibility();
+            updateHudVisibility();
         }
     }, { passive: false });
 
@@ -422,7 +438,7 @@
         if (bricks.grid.length === 0 || bricks.grid.every(bb => bb.hp <= 0)) {
             world.levelPending = true; // prevent double triggers from concurrent loops
             world.running = false;
-            setTimeout(() => {  newLevel(); world.running = true; }, 600);
+            setTimeout(() => { newLevel(); world.running = true; }, 600);
         }
     }
 
@@ -598,6 +614,7 @@
                         updatePlayPauseBtn();
                         resetBalls(true);
                         updateHelpVisibility();
+                        updateHudVisibility();
                         return;
                     }
                 }
@@ -905,9 +922,10 @@
         if (document.hidden && world.running && !world.paused) {
             world.paused = true;
             updatePlayPauseBtn();
-            updateHelpVisibility();   // add this
+            updateHelpVisibility();
+            updateHudVisibility();
         }
     });
 
-    fitCanvas(); restart(true); updateHelpVisibility(); requestAnimationFrame(frame);
+    fitCanvas(); restart(true); updateHelpVisibility(); updateHudVisibility(); requestAnimationFrame(frame);
 })();
