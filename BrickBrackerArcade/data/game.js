@@ -320,7 +320,6 @@
         // Rows still scale with level, capped
         bricks.rows = Math.max(4, Math.min(10, 5 + Math.floor(world.level / 2)));
 
-        // No spacing between bricks
         bricks.pad = 0;
         bricks.top = Math.max(50, Math.round(world.H * 0.12));
 
@@ -328,16 +327,40 @@
         const heightScale = Math.max(0.70, 1 - (world.level - 1) * 0.03);
         bricks.h = 22 * heightScale;
 
-        // Exact width per column; allow fractional to avoid rounding gaps
         bricks.w = (world.W - bricks.pad * (bricks.cols - 1)) / bricks.cols;
 
+        // --- New: determine % of unbreakable (chrome) bricks ---
+        // Level 1 → 0%; high levels → up to 10%
+        const unbreakableRatio = Math.min(0.10, (world.level - 1) * 0.015);
+        const totalBricks = bricks.rows * bricks.cols;
+        const unbreakableCount = Math.floor(totalBricks * unbreakableRatio);
+
+        // Randomly choose which indices will be unbreakable
+        const unbreakableSet = new Set();
+        while (unbreakableSet.size < unbreakableCount) {
+            unbreakableSet.add(Math.floor(Math.random() * totalBricks));
+        }
+
         bricks.grid = [];
+        let idx = 0;
         for (let r = 0; r < bricks.rows; r++) {
             for (let c = 0; c < bricks.cols; c++) {
                 const x = c * (bricks.w + bricks.pad);
                 const y = bricks.top + r * (bricks.h + bricks.pad);
                 const hp = 1 + Math.floor((r + world.level - 1) / 3);
-                bricks.grid.push({ x, y, w: bricks.w, h: bricks.h, hp, color: COLORS.bricks[(r + c) % COLORS.bricks.length] });
+                const color = COLORS.bricks[(r + c) % COLORS.bricks.length];
+                const isChrome = unbreakableSet.has(idx++);
+                if (isChrome) {
+                    // add a chrome-like metallic color
+                    bricks.grid.push({
+                        x, y, w: bricks.w, h: bricks.h,
+                        hp: Infinity,                      // never breaks
+                        unbreakable: true,
+                        color: 'linear-chrome'             // placeholder tag
+                    });
+                } else {
+                    bricks.grid.push({ x, y, w: bricks.w, h: bricks.h, hp, unbreakable: false, color });
+                }
             }
         }
         bricks.total = bricks.grid.length;
@@ -649,12 +672,20 @@
                 if ((wasLeft && overlapLeft < overlapTop && overlapLeft < overlapBottom) || (!wasLeft && overlapLeft < overlapRight && overlapLeft < overlapTop && overlapLeft < overlapBottom)) { ball.vx = -Math.abs(ball.vx); reflected = true; }
                 else if ((wasRight && overlapRight < overlapTop && overlapRight < overlapBottom) || (!wasRight && overlapRight < overlapLeft && overlapRight < overlapTop && overlapRight < overlapBottom)) { ball.vx = Math.abs(ball.vx); reflected = true; }
                 if (!reflected) { if (prevY <= b.y || overlapTop < overlapBottom) ball.vy = -Math.abs(ball.vy); else ball.vy = Math.abs(ball.vy); }
+                if (!b.unbreakable) {
+                    b.hp -= 1;
+                    world.score += 10;
+                    ui.score.textContent = world.score;
+                    SFX.brick();
 
-                b.hp -= 1; world.score += 10; ui.score.textContent = world.score; SFX.brick();
-                if (b.hp <= 0) {
-                    spawnExplosion(b.x + b.w / 2, b.y + b.h / 2, b.w, b.h, b.color);
-                    maybeSpawnPowerup(b.x + b.w / 2, b.y + b.h / 2);
-                    bricks.grid.splice(i, 1); i--;
+                    if (b.hp <= 0) {
+                        spawnExplosion(b.x + b.w / 2, b.y + b.h / 2, b.w, b.h, b.color);
+                        maybeSpawnPowerup(b.x + b.w / 2, b.y + b.h / 2);
+                        bricks.grid.splice(i, 1); i--;
+                    }
+                } else {
+                    // unbreakable — just bounce with metallic sound
+                    SFX.wall();
                 }
 
                 // nudge out using a tiny fraction of this frame’s advance
@@ -674,10 +705,15 @@
                 const b = bricks.grid[i];
                 if (s.x >= b.x && s.x <= b.x + b.w && s.y >= b.y && s.y <= b.y + b.h) {
                     b.hp -= 1; world.score += 5; ui.score.textContent = world.score; SFX.laserHit();
-                    if (b.hp <= 0) {
-                        spawnExplosion(b.x + b.w / 2, b.y + b.h / 2, b.w, b.h, b.color);
-                        maybeSpawnPowerup(b.x + b.w / 2, b.y + b.h / 2);
-                        bricks.grid.splice(i, 1); i--;
+                    if (!b.unbreakable) {
+                        b.hp -= 1; world.score += 5; ui.score.textContent = world.score; SFX.laserHit();
+                        if (b.hp <= 0) {
+                            spawnExplosion(b.x + b.w / 2, b.y + b.h / 2, b.w, b.h, b.color);
+                            maybeSpawnPowerup(b.x + b.w / 2, b.y + b.h / 2);
+                            bricks.grid.splice(i, 1); i--;
+                        }
+                    } else {
+                        SFX.wall();
                     }
                     shots.splice(si, 1); break;
                 }
@@ -757,10 +793,35 @@
 
         // Bricks
         for (const b of bricks.grid) {
-            const alpha = clamp(0.55 + b.hp * 0.15, 0.55, 0.95);
-            ctx.fillStyle = b.color; ctx.globalAlpha = alpha; ctx.shadowColor = b.color; ctx.shadowBlur = 12; drawRoundedRect(b.x, b.y, b.w, b.h, 6); ctx.fill();
-            ctx.globalAlpha = alpha * 0.35; ctx.shadowBlur = 0; drawRoundedRect(b.x + 2, b.y + 2, b.w - 4, b.h - 10, 5); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); ctx.globalAlpha = 1;
+            if (b.unbreakable) {
+                // Chrome bricks — metallic gradient
+                const grad = ctx.createLinearGradient(b.x, b.y, b.x + b.w, b.y + b.h);
+                grad.addColorStop(0, '#aaa');
+                grad.addColorStop(0.5, '#fff');
+                grad.addColorStop(1, '#888');
+                ctx.fillStyle = grad;
+                ctx.shadowColor = '#00f0ff';
+                ctx.shadowBlur = 20;
+                drawRoundedRect(b.x, b.y, b.w, b.h, 6);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            } else {
+                const alpha = clamp(0.55 + b.hp * 0.15, 0.55, 0.95);
+                ctx.fillStyle = b.color;
+                ctx.globalAlpha = alpha;
+                ctx.shadowColor = b.color;
+                ctx.shadowBlur = 12;
+                drawRoundedRect(b.x, b.y, b.w, b.h, 6);
+                ctx.fill();
+                ctx.globalAlpha = alpha * 0.35;
+                ctx.shadowBlur = 0;
+                drawRoundedRect(b.x + 2, b.y + 2, b.w - 4, b.h - 10, 5);
+                ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
         }
+
 
         // Paddle
         ctx.fillStyle = COLORS.accent; ctx.shadowColor = COLORS.accent; ctx.shadowBlur = 16; drawRoundedRect(paddle.x, paddle.y, paddle.w, paddle.h, 7); ctx.fill(); ctx.shadowBlur = 0;
