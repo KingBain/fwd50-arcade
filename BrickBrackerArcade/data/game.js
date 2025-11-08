@@ -458,12 +458,25 @@
     // Centralized level-clear check, invoked after any brick changes (balls or lasers)
     function maybeHandleLevelClear() {
         if (world.levelPending || !world.running) return;
-        if (bricks.grid.length === 0 || bricks.grid.every(bb => bb.hp <= 0)) {
-            world.levelPending = true; // prevent double triggers from concurrent loops
+        const hasBreakable = bricks.grid.some(bb => !bb.unbreakable && bb.hp > 0);
+        if (!hasBreakable) {
+            world.levelPending = true;
             world.running = false;
             setTimeout(() => { newLevel(); world.running = true; }, 600);
         }
     }
+
+    function getChromeGradient(b) {
+        // Animated shimmer based on time
+        const t = (performance.now() / 1000) % 3; // 3-second cycle
+        const offset = (Math.sin(t * Math.PI * 2) + 1) / 2; // oscillates 0→1→0
+        const grad = ctx.createLinearGradient(b.x, b.y, b.x + b.w, b.y + b.h);
+        grad.addColorStop(0, `hsl(${200 + offset * 40}, 10%, 65%)`);
+        grad.addColorStop(0.5, `hsl(${180 + offset * 60}, 10%, 92%)`);
+        grad.addColorStop(1, `hsl(${210 + offset * 40}, 10%, 55%)`);
+        return grad;
+    }
+
 
     // ===== Power-up spawn logic (dynamic, late-game bias to multiball) =====
     function computeDropChance(aliveRatio, ballCount) {
@@ -794,17 +807,18 @@
         // Bricks
         for (const b of bricks.grid) {
             if (b.unbreakable) {
-                // Chrome bricks — metallic gradient
-                const grad = ctx.createLinearGradient(b.x, b.y, b.x + b.w, b.y + b.h);
-                grad.addColorStop(0, '#aaa');
-                grad.addColorStop(0.5, '#fff');
-                grad.addColorStop(1, '#888');
+                // Chrome bricks shimmer dynamically
+                const grad = getChromeGradient(b);
                 ctx.fillStyle = grad;
-                ctx.shadowColor = '#00f0ff';
-                ctx.shadowBlur = 20;
+                ctx.shadowColor = `rgba(0,240,255,${0.4 + 0.3 * Math.sin(performance.now() / 500)})`;
+                ctx.shadowBlur = 18;
                 drawRoundedRect(b.x, b.y, b.w, b.h, 6);
                 ctx.fill();
                 ctx.shadowBlur = 0;
+                ctx.globalAlpha = 0.25;
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.fillRect(b.x, b.y, b.w, b.h * 0.25);
+                ctx.globalAlpha = 1;
             } else {
                 const alpha = clamp(0.55 + b.hp * 0.15, 0.55, 0.95);
                 ctx.fillStyle = b.color;
